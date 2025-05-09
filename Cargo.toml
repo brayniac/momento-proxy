@@ -4,29 +4,49 @@ description = "a proxy to access Momento cache(s) over memcache protocol"
 authors = ["Brian Martin <brayniac@gmail.com>"]
 
 version = "0.3.2"
-edition = { workspace = true }
-homepage = { workspace = true }
-repository = { workspace = true }
-license = { workspace = true }
+edition = "2021"
+homepage = "https://pelikan.io"
+repository = "https://github.com/pelikan-io/pelikan"
+license = "Apache-2.0"
 
 [dependencies]
-backtrace = { workspace = true }
-bytes = { workspace = true }
-clap = { workspace = true }
-clocksource = { workspace = true }
-common = { path = "../../common" }
-config = { path = "../../config" }
-crossbeam-channel = { workspace = true }
-futures = { workspace = true }
-libc = { workspace = true }
-logger = { path = "../../logger" }
-metriken = { workspace = true }
+backtrace = "0.3.69"
+bytes = "1.7.2"
+clap = "4.4.6"
+clocksource = "0.8.1"
+common = { git = "https://github.com/pelikan-io/pelikan.git", rev = "3309d317", package = "common" }
+config = { git = "https://github.com/pelikan-io/pelikan.git", rev = "3309d317", package = "config" }
+crossbeam-channel = "0.5.15"
+futures = "0.3.31"
+libc = "0.2.149"
+logger = { git = "https://github.com/pelikan-io/pelikan.git", rev = "3309d317", package = "logger" }
+metriken = "0.7.0"
 momento = "0.50.4"
-pelikan-net = { workspace = true, features = ["metrics"] }
-protocol-admin = { path = "../../protocol/admin" }
-protocol-memcache = { path = "../../protocol/memcache" }
-protocol-resp = { path = "../../protocol/resp" }
-session = { path = "../../session" }
-storage-types = { path = "../../storage/types" }
+pelikan-net = { git = "https://github.com/pelikan-io/pelikan.git", rev = "3309d317", package = "pelikan-net", features = ["metrics"] }
+protocol-admin = { git = "https://github.com/pelikan-io/pelikan.git", rev = "3309d317", package = "protocol-admin" }
+protocol-memcache = { git = "https://github.com/pelikan-io/pelikan.git", rev = "3309d317", package = "protocol-memcache" }
+protocol-resp = { git = "https://github.com/pelikan-io/pelikan.git", rev = "3309d317", package = "protocol-resp" }
+session = { git = "https://github.com/pelikan-io/pelikan.git", rev = "3309d317", package = "session" }
+storage-types = { git = "https://github.com/pelikan-io/pelikan.git", rev = "3309d317", package = "storage-types" }
 tokio = { version = "1.43.1", features = ["full"] }
-thiserror = { workspace = true }
+thiserror = "1.0.49"
+
+[profile.release]
+opt-level = 3
+debug = true
+rpath = false
+lto = true
+debug-assertions = false
+codegen-units = 1
+
+[profile.bench]
+opt-level = 3
+debug = true
+rpath = false
+lto = true
+debug-assertions = false
+codegen-units = 1
+
+[profile.dev]
+debug = true
+opt-level = 0
