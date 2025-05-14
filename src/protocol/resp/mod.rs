@@ -2,9 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
-use momento::MomentoError;
 pub use protocol_resp::{Request, RequestParser};
-use std::future::Future;
 
 mod del;
 mod get;
@@ -33,6 +31,20 @@ mod sismember;
 mod smembers;
 mod srem;
 mod sunion;
+mod utils;
+mod zadd;
+mod zcard;
+mod zcount;
+mod zincrby;
+mod zmscore;
+mod zrange;
+mod zrank;
+mod zrem;
+mod zrevrank;
+mod zscore;
+mod zunionstore;
+
+pub(crate) use utils::*;
 
 pub use self::lindex::*;
 pub use self::llen::*;
@@ -61,23 +73,14 @@ pub use hset::*;
 pub use hvals::*;
 pub use sadd::*;
 pub use set::*;
-
-pub(crate) fn momento_error_to_resp_error(buf: &mut Vec<u8>, command: &str, error: MomentoError) {
-    use crate::BACKEND_EX;
-
-    BACKEND_EX.increment();
-
-    error!("backend error for {command}: {error}");
-    buf.extend_from_slice(format!("-ERR backend error: {error}\r\n").as_bytes());
-}
-
-async fn update_method_metrics<T, E>(
-    count: &metriken::Counter,
-    count_ex: &metriken::Counter,
-    future: impl Future<Output = Result<T, E>>,
-) -> Result<T, E> {
-    count.increment();
-    future.await.inspect_err(|_| {
-        count_ex.increment();
-    })
-}
+pub use zadd::*;
+pub use zcard::*;
+pub use zcount::*;
+pub use zincrby::*;
+pub use zmscore::*;
+pub use zrange::*;
+pub use zrank::*;
+pub use zrem::*;
+pub use zrevrank::*;
+pub use zscore::*;
+pub use zunionstore::*;
