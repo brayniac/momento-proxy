@@ -15,30 +15,54 @@ pub async fn get(
     request: &Get,
     flags: bool,
     memory_cache: Option<MCache>,
+    recorder: &RpcCallGuard,
 ) -> Result<Response, Error> {
     let mut tasks = futures::stream::FuturesOrdered::new();
     let mut eager_hits = Vec::new();
+    let mut mcache_recorder = recorder.clone();
     for key in request.keys() {
         if let Some(memory_cache) = &memory_cache {
             match memory_cache.get(&**key) {
-                Some(hit) => eager_hits.push(match hit.into_value() {
-                    cache::CacheValue::Memcached { value } => value,
-                }),
+                Some(hit) => {
+                    eager_hits.push(match hit.into_value() {
+                        cache::CacheValue::Memcached { value } => value,
+                    });
+                    debug!("eager hit for key {:?}", key);
+                    mcache_recorder.complete_hit_mcache();
+                }
                 None => {
                     BACKEND_REQUEST.increment();
-                    tasks.push_back(run_get(client, cache_name, flags, key));
+                    tasks.push_back(run_get(
+                        client,
+                        cache_name,
+                        flags,
+                        key,
+                        recorder
+                    ));
                 }
             }
         } else {
             BACKEND_REQUEST.increment();
-            tasks.push_back(run_get(client, cache_name, flags, key));
+            tasks.push_back(run_get(
+                client,
+                cache_name,
+                flags,
+                key,
+                recorder
+            ));
         }
     }
     let values_from_upstream: Vec<Option<protocol_memcache::Value>> = tasks.collect().await;
-    let mut values: Vec<protocol_memcache::Value> = values_from_upstream.into_iter().flatten().collect();
+    let mut values: Vec<protocol_memcache::Value> =
+        values_from_upstream.into_iter().flatten().collect();
     if let Some(memory_cache) = &memory_cache {
         for value in values.iter() {
-            memory_cache.set(value.key().to_vec(), CacheValue::Memcached { value: value.clone() });
+            memory_cache.set(
+                value.key().to_vec(),
+                CacheValue::Memcached {
+                    value: value.clone(),
+                },
+            );
         }
     }
     values.extend(eager_hits);
@@ -55,7 +79,9 @@ async fn run_get(
     cache_name: &str,
     flags: bool,
     key: &[u8],
+    recorder: &RpcCallGuard,
 ) -> Option<protocol_memcache::Value> {
+    let mut recorder = recorder.clone();
     match timeout(Duration::from_millis(200), client.get(cache_name, key)).await {
         Ok(Ok(response)) => match response {
             GetResponse::Hit { value } => {
@@ -64,6 +90,7 @@ async fn run_get(
                 let value: Vec<u8> = value.into();
 
                 if flags && value.len() < 5 {
+                    recorder.complete_miss();
                     klog_1(&"get", &key, Status::Miss, 0);
                     None
                 } else if flags {
@@ -71,11 +98,13 @@ async fn run_get(
                     let value: Vec<u8> = value[4..].into();
                     let length = value.len();
 
+                    recorder.complete_hit_momento();
                     klog_1(&"get", &key, Status::Hit, length);
                     Some(protocol_memcache::Value::new(key, flags, None, &value))
                 } else {
                     let length = value.len();
 
+                    recorder.complete_hit_momento();
                     klog_1(&"get", &key, Status::Hit, length);
                     Some(protocol_memcache::Value::new(key, 0, None, &value))
                 }
@@ -83,6 +112,7 @@ async fn run_get(
             GetResponse::Miss => {
                 GET_KEY_MISS.increment();
 
+                recorder.complete_miss();
                 klog_1(&"get", &key, Status::Miss, 0);
                 None
             }
@@ -99,7 +129,6 @@ async fn run_get(
         }
         Err(_) => {
             // we had a timeout, incr stats and move on
-            // treating it as a miss
             BACKEND_EX.increment();
             BACKEND_EX_TIMEOUT.increment();
 
