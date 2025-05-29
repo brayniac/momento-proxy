@@ -9,7 +9,7 @@ use tokio::sync::mpsc;
 use tokio_rustls::rustls::RootCertStore;
 use tonic::metadata::MetadataValue;
 
-use super::{proxy::DefaultProxyMetrics, util::proxy_sum_gauge, RpcMetrics};
+use super::proxy::DefaultProxyMetrics;
 
 pub struct ProxyMetricsBuilder {
     batch_interval: Duration,
@@ -69,15 +69,7 @@ impl ProxyMetricsBuilder {
             }
         }
 
-        let metrics = DefaultProxyMetrics {
-            memcached_get: RpcMetrics::new(gauge_factory, "memcached_get"),
-            memcached_set: RpcMetrics::new(gauge_factory, "memcached_set"),
-            memcached_delete: RpcMetrics::new(gauge_factory, "memcached_delete"),
-            memcached_unimplemented: RpcMetrics::new(gauge_factory, "memcached_unimplemented"),
-            connections_opened: proxy_sum_gauge(gauge_factory, "connections_opened"),
-            connections_closed: proxy_sum_gauge(gauge_factory, "connections_closed"),
-        };
-
+        let metrics = DefaultProxyMetrics::new(gauge_factory, self.batch_interval);
         Arc::new(metrics)
     }
 }
