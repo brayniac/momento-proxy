@@ -93,7 +93,6 @@ impl RpcCallGuard {
             self.recorded
                 .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
         {
-            debug!("{} complete_ok", self.rpc);
             self.latency_ok
                 .observe(self.start_time.elapsed().as_nanos() as i64);
         }
@@ -104,7 +103,6 @@ impl RpcCallGuard {
             self.recorded
                 .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
         {
-            debug!("{} complete_error", self.rpc);
             self.latency_error
                 .observe(self.start_time.elapsed().as_nanos() as i64);
         }
@@ -170,5 +168,32 @@ where
 {
     let result = fut.await;
     recorder.complete(&result);
+    result
+}
+
+pub trait ResponseWrappingError {
+    fn is_error(&self) -> bool;
+}
+
+pub async fn with_wrapped_error_response_rpc_call_guard<R: ResponseWrappingError, E, F>(
+    mut recorder: RpcCallGuard,
+    fut: F,
+) -> Result<R, E>
+where
+    F: Future<Output = Result<R, E>>,
+{
+    let result = fut.await;
+    match &result {
+        Ok(response) => {
+            if response.is_error() {
+                recorder.complete_error();
+            } else {
+                recorder.complete_ok();
+            }
+        }
+        Err(_) => {
+            recorder.complete_error();
+        }
+    }
     result
 }

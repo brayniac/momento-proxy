@@ -55,6 +55,7 @@ pub async fn delete(
 
             klog_1(&"delete", &key, Status::ServerError, 0);
 
+            error!("backend error for delete: {}", e);
             Ok(Response::server_error(format!("{e}")))
         }
         Err(_) => {

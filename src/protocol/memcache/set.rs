@@ -102,6 +102,7 @@ pub async fn set(
                 0,
             );
 
+            error!("backend error for set: {}", e);
             Ok(Response::server_error(format!("{e}")))
         }
         Err(_) => {
