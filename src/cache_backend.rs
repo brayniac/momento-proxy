@@ -21,17 +21,6 @@ impl From<MomentoGetResponse> for GetResponse {
     }
 }
 
-// Custom error type for memcache operations
-#[derive(Debug)]
-struct MemcacheError(String);
-
-impl std::fmt::Display for MemcacheError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Memcache error: {}", self.0)
-    }
-}
-
-impl std::error::Error for MemcacheError {}
 
 #[async_trait]
 pub trait CacheBackend: Clone + Send + Sync + 'static {
@@ -140,17 +129,6 @@ async fn memcached_worker(addr: String, mut receiver: mpsc::Receiver<Command>) {
                     let result = execute_delete(&mut reader, &mut writer, &key).await;
                     let _ = response.send(result);
                 }
-            }
-
-            // If we got an error, break and reconnect
-            if let Some(Command::Get { response, .. }) = receiver.try_recv().ok() {
-                let _ = response.send(Err(MomentoError {
-                    message: "Connection error".to_string(),
-                    error_code: momento::MomentoErrorCode::InternalServerError,
-                    inner_error: None,
-                    details: None,
-                }));
-                break;
             }
         }
     }
