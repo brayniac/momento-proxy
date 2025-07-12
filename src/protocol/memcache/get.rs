@@ -92,13 +92,12 @@ async fn run_get(
                     Ok(None)
                 } else if flags {
                     let flags: u32 = u32::from_be_bytes([value[0], value[1], value[2], value[3]]);
-                    let value: Vec<u8> = value[4..].into();
-                    let length = value.len();
+                    let length = value.len() - 4;
 
                     recorder.complete_hit_momento();
                     klog_1(&"get", &key, Status::Hit, length);
                     Ok(Some(protocol_memcache::Value::new(
-                        key, flags, None, &value,
+                        key, flags, None, &value[4..],
                     )))
                 } else {
                     let length = value.len();
