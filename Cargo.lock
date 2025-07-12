@@ -469,7 +469,7 @@ checksum = "5b63caa9aa9397e2d9480a9b13673856c78d8ac123288526c37d7839f2a86990"
 [[package]]
 name = "common"
 version = "0.3.2"
-source = "git+https://github.com/pelikan-io/pelikan.git?rev=4afdd11#4afdd11ab9e37244789993d5066cd4a6382913f3"
+source = "git+https://github.com/brayniac/pelikan.git?branch=protocol#ede3062f853a38f0272367ea68bbfed5f052229d"
 dependencies = [
  "boring",
  "clocksource",
@@ -482,7 +482,7 @@ dependencies = [
 [[package]]
 name = "config"
 version = "0.3.2"
-source = "git+https://github.com/pelikan-io/pelikan.git?rev=4afdd11#4afdd11ab9e37244789993d5066cd4a6382913f3"
+source = "git+https://github.com/brayniac/pelikan.git?branch=protocol#ede3062f853a38f0272367ea68bbfed5f052229d"
 dependencies = [
  "common",
  "log",
@@ -1215,7 +1215,7 @@ checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 [[package]]
 name = "logger"
 version = "0.3.2"
-source = "git+https://github.com/pelikan-io/pelikan.git?rev=4afdd11#4afdd11ab9e37244789993d5066cd4a6382913f3"
+source = "git+https://github.com/brayniac/pelikan.git?branch=protocol#ede3062f853a38f0272367ea68bbfed5f052229d"
 dependencies = [
  "common",
  "config",
@@ -1418,7 +1418,7 @@ dependencies = [
  "serde",
  "session",
  "socket2",
- "storage-types",
+ "storage-types 0.3.2 (git+https://github.com/pelikan-io/pelikan.git?rev=4afdd11)",
  "thiserror",
  "tokio",
  "tokio-rustls 0.26.2",
@@ -1541,7 +1541,7 @@ dependencies = [
 [[package]]
 name = "pelikan-net"
 version = "0.4.1"
-source = "git+https://github.com/pelikan-io/pelikan.git?rev=4afdd11#4afdd11ab9e37244789993d5066cd4a6382913f3"
+source = "git+https://github.com/brayniac/pelikan.git?branch=protocol#ede3062f853a38f0272367ea68bbfed5f052229d"
 dependencies = [
  "boring",
  "boring-sys",
@@ -1736,7 +1736,7 @@ dependencies = [
 [[package]]
 name = "protocol-admin"
 version = "0.3.2"
-source = "git+https://github.com/pelikan-io/pelikan.git?rev=4afdd11#4afdd11ab9e37244789993d5066cd4a6382913f3"
+source = "git+https://github.com/brayniac/pelikan.git?branch=protocol#ede3062f853a38f0272367ea68bbfed5f052229d"
 dependencies = [
  "common",
  "config",
@@ -1744,25 +1744,25 @@ dependencies = [
  "metriken",
  "parking_lot",
  "protocol-common",
- "storage-types",
+ "storage-types 0.3.2 (git+https://github.com/brayniac/pelikan.git?branch=protocol)",
 ]
 
 [[package]]
 name = "protocol-common"
 version = "0.3.2"
-source = "git+https://github.com/pelikan-io/pelikan.git?rev=4afdd11#4afdd11ab9e37244789993d5066cd4a6382913f3"
+source = "git+https://github.com/brayniac/pelikan.git?branch=protocol#ede3062f853a38f0272367ea68bbfed5f052229d"
 dependencies = [
  "bytes",
  "common",
  "config",
  "logger",
- "storage-types",
+ "storage-types 0.3.2 (git+https://github.com/brayniac/pelikan.git?branch=protocol)",
 ]
 
 [[package]]
 name = "protocol-memcache"
 version = "0.3.2"
-source = "git+https://github.com/pelikan-io/pelikan.git?rev=4afdd11#4afdd11ab9e37244789993d5066cd4a6382913f3"
+source = "git+https://github.com/brayniac/pelikan.git?branch=protocol#ede3062f853a38f0272367ea68bbfed5f052229d"
 dependencies = [
  "bytes",
  "clocksource",
@@ -1776,7 +1776,7 @@ dependencies = [
 [[package]]
 name = "protocol-resp"
 version = "0.3.2"
-source = "git+https://github.com/pelikan-io/pelikan.git?rev=4afdd11#4afdd11ab9e37244789993d5066cd4a6382913f3"
+source = "git+https://github.com/brayniac/pelikan.git?branch=protocol#ede3062f853a38f0272367ea68bbfed5f052229d"
 dependencies = [
  "bstr",
  "common",
@@ -2167,7 +2167,7 @@ dependencies = [
 [[package]]
 name = "session"
 version = "0.3.2"
-source = "git+https://github.com/pelikan-io/pelikan.git?rev=4afdd11#4afdd11ab9e37244789993d5066cd4a6382913f3"
+source = "git+https://github.com/brayniac/pelikan.git?branch=protocol#ede3062f853a38f0272367ea68bbfed5f052229d"
 dependencies = [
  "bytes",
  "clocksource",
@@ -2232,6 +2232,11 @@ dependencies = [
  "libc",
  "windows-sys 0.52.0",
 ]
+
+[[package]]
+name = "storage-types"
+version = "0.3.2"
+source = "git+https://github.com/brayniac/pelikan.git?branch=protocol#ede3062f853a38f0272367ea68bbfed5f052229d"
 
 [[package]]
 name = "storage-types"

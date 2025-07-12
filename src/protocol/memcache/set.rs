@@ -47,7 +47,7 @@ pub async fn set<B: CacheBackend>(
         // (1) A proxy process restart doesn't degrade performance (cache warms on read)
         // (2) Multiple proxies each keep a warm local cache, even if writes are done by others
         let flags = if flags { request.flags() } else { 0 };
-        let value = protocol_memcache::Value::new(&key, flags, None, &request.value());
+        let value = protocol_memcache::Value::new(key.to_vec().into_boxed_slice(), flags, None, request.value().to_vec().into_boxed_slice());
         memory_cache.set(key.to_vec(), CacheValue::Memcached { value });
     }
 

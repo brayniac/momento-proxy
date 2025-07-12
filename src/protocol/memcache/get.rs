@@ -98,17 +98,17 @@ async fn run_get<B: CacheBackend>(
                     recorder.complete_hit_momento();
                     klog_1(&"get", &key, Status::Hit, length);
                     Ok(Some(protocol_memcache::Value::new(
-                        key,
+                        key.to_vec().into_boxed_slice(),
                         flags,
                         None,
-                        &value[4..],
+                        value[4..].to_vec().into_boxed_slice(),
                     )))
                 } else {
                     let length = value.len();
 
                     recorder.complete_hit_momento();
                     klog_1(&"get", &key, Status::Hit, length);
-                    Ok(Some(protocol_memcache::Value::new(key, 0, None, &value)))
+                    Ok(Some(protocol_memcache::Value::new(key.to_vec().into_boxed_slice(), 0, None, value.into_boxed_slice())))
                 }
             }
             GetResponse::Miss => {

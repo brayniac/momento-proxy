@@ -78,7 +78,8 @@ enum Command {
     },
     Set {
         key: Vec<u8>,
-        data: Vec<u8>,
+        value: Vec<u8>,
+        skip_flags: bool,
         expiration: u32,
         response: oneshot::Sender<Result<(), MomentoError>>,
     },
@@ -124,12 +125,18 @@ async fn memcached_worker(addr: String, mut receiver: mpsc::Receiver<Command>) {
                 }
                 Command::Set {
                     key,
-                    data,
+                    value,
+                    skip_flags,
                     expiration,
                     response,
                 } => {
+                    let data = if skip_flags && value.len() >= 4 {
+                        &value[4..]
+                    } else {
+                        &value
+                    };
                     let result =
-                        execute_set(&mut reader, &mut writer, &key, &data, expiration).await;
+                        execute_set(&mut reader, &mut writer, &key, data, expiration).await;
                     // Check if we got a broken pipe or other connection error
                     let is_connection_error = matches!(&result, Err(e) if e.message.contains("Broken pipe") || e.message.contains("Connection reset"));
                     let _ = response.send(result);
@@ -411,17 +418,11 @@ impl CacheBackend for LocalMemcachedBackend {
     ) -> Result<(), MomentoError> {
         let expiration = ttl.map(|d| d.as_secs() as u32).unwrap_or(0);
 
-        // Skip the first 4 bytes (flags) if present
-        let data = if value.len() >= 4 {
-            value.into_iter().skip(4).collect()
-        } else {
-            value
-        };
-
         let (tx, rx) = oneshot::channel();
         let cmd = Command::Set {
             key,
-            data,
+            value,
+            skip_flags: true, // We always skip flags for LocalMemcachedBackend
             expiration,
             response: tx,
         };
