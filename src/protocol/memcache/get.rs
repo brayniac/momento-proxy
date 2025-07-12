@@ -3,14 +3,15 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::cache::CacheValue;
+use crate::cache_backend::CacheBackend;
 use crate::klog::{klog_1, Status};
 use crate::{Error, *};
 use futures::StreamExt;
-use momento::cache::GetResponse;
+use crate::cache_backend::GetResponse;
 use protocol_memcache::*;
 
-pub async fn get(
-    client: &CacheClient,
+pub async fn get<B: CacheBackend>(
+    client: &B,
     cache_name: &str,
     request: &Get,
     flags: bool,
@@ -71,8 +72,8 @@ pub async fn get(
     }
 }
 
-async fn run_get(
-    client: &CacheClient,
+async fn run_get<B: CacheBackend>(
+    client: &B,
     cache_name: &str,
     flags: bool,
     key: &[u8],

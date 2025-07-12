@@ -4,6 +4,7 @@
 
 use crate::*;
 use session::Buf;
+use protocol_admin::Protocol;
 
 #[metric(name = "admin_conn_curr")]
 pub static ADMIN_CONN_CURR: Gauge = Gauge::new();

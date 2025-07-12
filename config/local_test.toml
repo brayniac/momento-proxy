@@ -1,0 +1,61 @@
+[admin]
+# interfaces listening on
+host = "0.0.0.0"
+# port listening on
+port = "9999"
+
+[proxy]
+# Use local memcached instead of Momento
+local_memcached_servers = ["localhost:11311"]
+
+# One or more caches must be specified. Each listens on its own port and directs
+# requests to a specific Momento cache.
+
+[[cache]]
+# interfaces listening on
+host = "0.0.0.0"
+# port listening on
+port = "11211"
+# the name of the Momento cache to direct requests to
+cache_name = "test"
+# the TTL, in seconds, to use when items are set as 'no expiry' (TTL is zero)
+# NOTE: accepted values are between 1 and 4_294_967 (inclusive)
+default_ttl = 900
+# The amount of ram to try to use locally caching get results (only supported on memcached currently)
+# 100MB local cache
+memory_cache_bytes = 104857600
+# How long to keep get results in memory (only supported on memcached currently)
+# 0 means no expiration
+memory_cache_ttl_seconds = 300
+# the protocol can be "memcache" or "resp" (Redis), the default is memcache
+protocol = "memcache"
+# Buffer sizes for read/write on the connection from the client application to the proxy
+# Defaults to 16 KiB. Can be tuned for performance based on item size distribution for the cache.
+# Values are rounded to the nearest multiple of 4KiB before use.
+buffer_size = 16384
+
+# For compatibility reasons, by default memcache flags are stored with the value. If you are
+# __certain__ you do not need this, you can opt-out and save 4 bytes per stored value. If any
+# clients rely on the flags, or if multiple instances of the proxy disagree on this setting,
+# you __will__ see weird errors and potentially have data corruption.
+flags = true
+
+# Configure the proxy's logging
+
+[debug]
+# choose from: error, warn, info, debug, trace
+log_level = "info"
+
+# Configure the logging of commands
+
+[klog]
+# optionally, log commands to the file below
+# file = "momento-proxy.cmd"
+# backup file name for use with log rotation
+backup = "momento-proxy.cmd.old"
+# trigger log rotation when the file grows beyond this size (in bytes). Set this
+# option to '0' to disable log rotation.
+max_size = 1073741824
+# specify the sampling ratio, 1 in N commands will be logged. Setting to '0'
+# will disable command logging.
+sample = 0

@@ -3,13 +3,13 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::cache::CacheValue;
+use crate::cache_backend::CacheBackend;
 use crate::klog::{klog_set, Status};
 use crate::{Error, *};
-use momento::cache::SetRequest;
 use protocol_memcache::*;
 
-pub async fn set(
-    client: &mut CacheClient,
+pub async fn set<B: CacheBackend>(
+    client: &mut B,
     cache_name: &str,
     request: &Set,
     flags: bool,
@@ -60,7 +60,7 @@ pub async fn set(
 
     match timeout(
         Duration::from_millis(200),
-        client.send_request(SetRequest::new(cache_name, key.clone(), value.clone()).ttl(ttl)),
+        client.set(cache_name, key.clone(), value.clone(), ttl),
     )
     .await
     {

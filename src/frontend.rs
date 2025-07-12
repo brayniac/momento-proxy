@@ -4,6 +4,7 @@
 
 use crate::protocol::*;
 use crate::*;
+use crate::cache_backend::CacheBackend;
 use pelikan_net::TCP_SEND_BYTE;
 use protocol_memcache::Protocol;
 use session::Buf;
@@ -13,9 +14,9 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-pub(crate) async fn handle_memcache_client(
+pub(crate) async fn handle_memcache_client<B: CacheBackend>(
     socket: tokio::net::TcpStream,
-    client: CacheClient,
+    client: B,
     cache_name: String,
     flags: bool,
     proxy_metrics: impl ProxyMetrics,
@@ -77,9 +78,9 @@ pub(crate) async fn handle_memcache_client(
     }
 }
 
-pub(crate) async fn handle_memcache_client_concrete(
+pub(crate) async fn handle_memcache_client_concrete<B: CacheBackend>(
     socket: tokio::net::TcpStream,
-    client: CacheClient,
+    client: B,
     cache_name: String,
     protocol: impl Protocol<protocol_memcache::Request, protocol_memcache::Response>
         + Clone
@@ -273,14 +274,14 @@ impl ResponseWrappingError for protocol_memcache::Response {
     }
 }
 
-async fn handle_memcache_request(
+async fn handle_memcache_request<B: CacheBackend>(
     channel: mpsc::Sender<
         std::result::Result<
             (u64, protocol_memcache::Request, protocol_memcache::Response),
             std::io::Error,
         >,
     >,
-    mut client: CacheClient,
+    mut client: B,
     cache_name: String,
     sequence: u64,
     request: protocol_memcache::Request,

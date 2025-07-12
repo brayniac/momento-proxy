@@ -1396,6 +1396,7 @@ dependencies = [
 name = "momento_proxy"
 version = "0.10.13"
 dependencies = [
+ "async-trait",
  "backtrace",
  "bytes",
  "clap",

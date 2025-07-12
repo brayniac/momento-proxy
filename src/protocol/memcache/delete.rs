@@ -2,12 +2,13 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
+use crate::cache_backend::CacheBackend;
 use crate::klog::{klog_1, Status};
 use crate::{Error, *};
 use protocol_memcache::*;
 
-pub async fn delete(
-    client: &mut CacheClient,
+pub async fn delete<B: CacheBackend>(
+    client: &mut B,
     cache_name: &str,
     request: &Delete,
 ) -> Result<Response, Error> {

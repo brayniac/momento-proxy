@@ -50,9 +50,11 @@ pub struct MomentoProxyConfig {
     klog: Klog,
 }
 
-#[derive(Default, Clone, Copy, Serialize, Deserialize, Debug)]
+#[derive(Default, Clone, Serialize, Deserialize, Debug)]
 pub struct Proxy {
     threads: Option<usize>,
+    #[serde(default)]
+    local_memcached_servers: Vec<String>,
 }
 
 // definitions
@@ -161,6 +163,14 @@ impl MomentoProxyConfig {
 
     pub fn threads(&self) -> Option<usize> {
         self.proxy.threads
+    }
+    
+    pub fn local_memcached_servers(&self) -> &[String] {
+        &self.proxy.local_memcached_servers
+    }
+    
+    pub fn use_local_memcached(&self) -> bool {
+        !self.proxy.local_memcached_servers.is_empty()
     }
 }
 

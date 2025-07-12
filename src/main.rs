@@ -39,6 +39,7 @@ const US: u64 = 1_000; // one microsecond in nanoseconds
 
 mod admin;
 mod cache;
+mod cache_backend;
 mod error;
 mod frontend;
 mod klog;
@@ -48,6 +49,8 @@ mod momento_proxy;
 mod protocol;
 
 pub use metrics::*;
+use cache_backend::{LocalMemcachedBackend, MomentoCacheBackend};
+use momento_proxy::Protocol;
 
 // NOTES:
 //
@@ -252,17 +255,21 @@ async fn spawn(
     let admin_listener = TcpListener::bind(&admin_addr).await?;
     info!("starting proxy admin listener on: {}", admin_addr);
 
-    // initialize the Momento cache client
-    if std::env::var("MOMENTO_API_KEY").is_err() {
-        eprintln!("environment variable `MOMENTO_API_KEY` is not set");
-        std::process::exit(1);
-    }
-    let momento_api_key = std::env::var("MOMENTO_API_KEY").expect("MOMENTO_API_KEY must be set");
-    let credential_provider =
-        CredentialProvider::from_string(momento_api_key).unwrap_or_else(|e| {
+    // initialize the credential provider if not using local memcached
+    let credential_provider = if !config.use_local_memcached() {
+        if std::env::var("MOMENTO_API_KEY").is_err() {
+            eprintln!("environment variable `MOMENTO_API_KEY` is not set");
+            std::process::exit(1);
+        }
+        let momento_api_key = std::env::var("MOMENTO_API_KEY").expect("MOMENTO_API_KEY must be set");
+        Some(CredentialProvider::from_string(momento_api_key).unwrap_or_else(|e| {
             eprintln!("failed to initialize credential provider. error: {e}");
             std::process::exit(1);
-        });
+        }))
+    } else {
+        info!("Using local memcached backend: {:?}", config.local_memcached_servers());
+        None
+    };
 
     if config.caches().is_empty() {
         eprintln!("no caches specified in the config");
@@ -285,11 +292,18 @@ async fn spawn(
             }
         };
 
-        let client_builder = CacheClient::builder()
-            .default_ttl(DEFAULT_TTL)
-            .configuration(configurations::Laptop::latest())
-            .credential_provider(credential_provider.clone())
-            .with_num_connections(cache.connection_count());
+        // Create the appropriate backend - we'll handle this within the spawn block
+        let backend_config = if config.use_local_memcached() {
+            None  // Signal to use local memcached
+        } else {
+            let client_builder = CacheClient::builder()
+                .default_ttl(DEFAULT_TTL)
+                .configuration(configurations::Laptop::latest())
+                .credential_provider(credential_provider.as_ref().unwrap().clone())
+                .with_num_connections(cache.connection_count());
+            
+            Some(client_builder)
+        };
 
         let tcp_listener = match std::net::TcpListener::bind(addr) {
             Ok(v) => {
@@ -316,6 +330,7 @@ async fn spawn(
         };
 
         let proxy_metrics = proxy_metrics.clone();
+        let local_memcached_servers = config.local_memcached_servers().to_vec();
         tokio::spawn(async move {
             info!(
                 "starting proxy frontend listener for cache `{}` on: {}",
@@ -345,17 +360,64 @@ async fn spawn(
                 None
             };
 
-            listener::listener(
-                tcp_listener,
-                client_builder,
-                cache.cache_name(),
-                cache.protocol(),
-                cache.flags(),
-                proxy_metrics,
-                local_cache,
-                cache.buffer_size(),
-            )
-            .await;
+            // Create backend inside spawn to avoid trait object issues
+            // Handle protocol-specific routing
+            match cache.protocol() {
+                Protocol::Memcache => {
+                    if let Some(client_builder) = backend_config {
+                        let client = client_builder.build().unwrap_or_else(|e| {
+                            eprintln!("could not create cache client: {}", e);
+                            std::process::exit(1);
+                        });
+                        let backend = MomentoCacheBackend(client);
+                        
+                        listener::listener(
+                            tcp_listener,
+                            backend,
+                            cache.cache_name(),
+                            cache.protocol(),
+                            cache.flags(),
+                            proxy_metrics,
+                            local_cache,
+                            cache.buffer_size(),
+                        )
+                        .await;
+                    } else {
+                        let backend = LocalMemcachedBackend::new(local_memcached_servers);
+                        
+                        listener::listener(
+                            tcp_listener,
+                            backend,
+                            cache.cache_name(),
+                            cache.protocol(),
+                            cache.flags(),
+                            proxy_metrics,
+                            local_cache,
+                            cache.buffer_size(),
+                        )
+                        .await;
+                    }
+                }
+                Protocol::Resp => {
+                    if backend_config.is_none() {
+                        eprintln!("RESP protocol does not support local memcached backend");
+                        std::process::exit(1);
+                    }
+                    let client = backend_config.unwrap().build().unwrap_or_else(|e| {
+                        eprintln!("could not create cache client: {}", e);
+                        std::process::exit(1);
+                    });
+                    
+                    listener::resp_listener(
+                        tcp_listener,
+                        client,
+                        cache.cache_name(),
+                        proxy_metrics,
+                        cache.buffer_size(),
+                    )
+                    .await;
+                }
+            }
         });
     }
 
