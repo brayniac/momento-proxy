@@ -26,8 +26,18 @@ pub(crate) async fn listener<B: CacheBackend>(
     // this acts as our listener thread and spawns tasks for each client
     loop {
         // accept a new client
-        if let Ok((socket, _)) = listener.accept().await {
+        if let Ok((mut socket, _)) = listener.accept().await {
             TCP_ACCEPT.increment();
+            
+            // Optimize socket for high throughput
+            socket.set_nodelay(true).ok();
+            
+            // Set larger socket buffers for client connections
+            let std_socket = socket.into_std().unwrap();
+            let socket2_socket = socket2::Socket::from(std_socket);
+            socket2_socket.set_send_buffer_size(4 * 1024 * 1024).ok(); // 4MB
+            socket2_socket.set_recv_buffer_size(4 * 1024 * 1024).ok(); // 4MB
+            let socket = tokio::net::TcpStream::from_std(socket2_socket.into()).unwrap();
 
             let backend = backend.clone();
             let cache_name = cache_name.clone();
@@ -70,8 +80,18 @@ pub(crate) async fn resp_listener(
     // this acts as our listener thread and spawns tasks for each client
     loop {
         // accept a new client
-        if let Ok((socket, _)) = listener.accept().await {
+        if let Ok((mut socket, _)) = listener.accept().await {
             TCP_ACCEPT.increment();
+            
+            // Optimize socket for high throughput
+            socket.set_nodelay(true).ok();
+            
+            // Set larger socket buffers for client connections
+            let std_socket = socket.into_std().unwrap();
+            let socket2_socket = socket2::Socket::from(std_socket);
+            socket2_socket.set_send_buffer_size(4 * 1024 * 1024).ok(); // 4MB
+            socket2_socket.set_recv_buffer_size(4 * 1024 * 1024).ok(); // 4MB
+            let socket = tokio::net::TcpStream::from_std(socket2_socket.into()).unwrap();
 
             let client = client.clone();
             let cache_name = cache_name.clone();
