@@ -1417,6 +1417,7 @@ dependencies = [
  "protocol-resp",
  "serde",
  "session",
+ "socket2",
  "storage-types",
  "thiserror",
  "tokio",

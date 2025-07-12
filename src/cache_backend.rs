@@ -95,7 +95,11 @@ async fn memcached_worker(addr: String, mut receiver: mpsc::Receiver<Command>) {
         let stream = match TcpStream::connect(&addr).await {
             Ok(s) => {
                 s.set_nodelay(true).ok();
-                s
+                // Set larger socket buffers for high throughput
+                let socket = socket2::Socket::from(s.into_std().unwrap());
+                socket.set_send_buffer_size(4 * 1024 * 1024).ok(); // 4MB send buffer
+                socket.set_recv_buffer_size(4 * 1024 * 1024).ok(); // 4MB recv buffer
+                TcpStream::from_std(socket.into()).unwrap()
             }
             Err(e) => {
                 eprintln!("Worker failed to connect to {}: {}", addr, e);
@@ -105,7 +109,7 @@ async fn memcached_worker(addr: String, mut receiver: mpsc::Receiver<Command>) {
         };
 
         let (reader, writer) = stream.into_split();
-        let mut reader = BufReader::new(reader);
+        let mut reader = BufReader::with_capacity(2 * 1024 * 1024, reader); // 2MB buffer
         let mut writer = writer;
 
         // Process commands on this connection
@@ -338,7 +342,7 @@ impl LocalMemcachedBackend {
         let mut workers = Vec::with_capacity(num_workers);
 
         for _ in 0..num_workers {
-            let (tx, rx) = mpsc::channel(100); // Buffer up to 100 commands per worker
+            let (tx, rx) = mpsc::channel(10); // Reduced buffer for large objects
             workers.push(tx);
 
             let addr_clone = addr.clone();
@@ -409,7 +413,7 @@ impl CacheBackend for LocalMemcachedBackend {
 
         // Skip the first 4 bytes (flags) if present
         let data = if value.len() >= 4 {
-            value[4..].to_vec()
+            value.into_iter().skip(4).collect()
         } else {
             value
         };
