@@ -3,8 +3,8 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::*;
-use session::Buf;
 use protocol_admin::Protocol;
+use session::Buf;
 
 #[metric(name = "admin_conn_curr")]
 pub static ADMIN_CONN_CURR: Gauge = Gauge::new();

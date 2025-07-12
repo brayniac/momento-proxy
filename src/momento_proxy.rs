@@ -164,11 +164,11 @@ impl MomentoProxyConfig {
     pub fn threads(&self) -> Option<usize> {
         self.proxy.threads
     }
-    
+
     pub fn local_memcached_servers(&self) -> &[String] {
         &self.proxy.local_memcached_servers
     }
-    
+
     pub fn use_local_memcached(&self) -> bool {
         !self.proxy.local_memcached_servers.is_empty()
     }

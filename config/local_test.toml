@@ -6,7 +6,7 @@ port = "9999"
 
 [proxy]
 # Use local memcached instead of Momento
-local_memcached_servers = ["memcache://localhost:11311"]
+local_memcached_servers = ["localhost:11311"]
 
 # One or more caches must be specified. Each listens on its own port and directs
 # requests to a specific Momento cache.

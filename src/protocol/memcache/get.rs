@@ -4,10 +4,10 @@
 
 use crate::cache::CacheValue;
 use crate::cache_backend::CacheBackend;
+use crate::cache_backend::GetResponse;
 use crate::klog::{klog_1, Status};
 use crate::{Error, *};
 use futures::StreamExt;
-use crate::cache_backend::GetResponse;
 use protocol_memcache::*;
 
 pub async fn get<B: CacheBackend>(
@@ -98,7 +98,10 @@ async fn run_get<B: CacheBackend>(
                     recorder.complete_hit_momento();
                     klog_1(&"get", &key, Status::Hit, length);
                     Ok(Some(protocol_memcache::Value::new(
-                        key, flags, None, &value[4..],
+                        key,
+                        flags,
+                        None,
+                        &value[4..],
                     )))
                 } else {
                     let length = value.len();

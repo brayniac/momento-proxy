@@ -2,11 +2,11 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
-use crate::*;
 use crate::cache_backend::CacheBackend;
+use crate::*;
+use momento::CacheClient;
 use momento_proxy::Protocol;
 use pelikan_net::{TCP_ACCEPT, TCP_CLOSE, TCP_CONN_CURR};
-use momento::CacheClient;
 
 pub(crate) async fn listener<B: CacheBackend>(
     listener: TcpListener,

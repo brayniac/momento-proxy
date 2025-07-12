@@ -48,8 +48,8 @@ mod metrics;
 mod momento_proxy;
 mod protocol;
 
-pub use metrics::*;
 use cache_backend::{LocalMemcachedBackend, MomentoCacheBackend};
+pub use metrics::*;
 use momento_proxy::Protocol;
 
 // NOTES:
@@ -261,13 +261,19 @@ async fn spawn(
             eprintln!("environment variable `MOMENTO_API_KEY` is not set");
             std::process::exit(1);
         }
-        let momento_api_key = std::env::var("MOMENTO_API_KEY").expect("MOMENTO_API_KEY must be set");
-        Some(CredentialProvider::from_string(momento_api_key).unwrap_or_else(|e| {
-            eprintln!("failed to initialize credential provider. error: {e}");
-            std::process::exit(1);
-        }))
+        let momento_api_key =
+            std::env::var("MOMENTO_API_KEY").expect("MOMENTO_API_KEY must be set");
+        Some(
+            CredentialProvider::from_string(momento_api_key).unwrap_or_else(|e| {
+                eprintln!("failed to initialize credential provider. error: {e}");
+                std::process::exit(1);
+            }),
+        )
     } else {
-        info!("Using local memcached backend: {:?}", config.local_memcached_servers());
+        info!(
+            "Using local memcached backend: {:?}",
+            config.local_memcached_servers()
+        );
         None
     };
 
@@ -294,14 +300,14 @@ async fn spawn(
 
         // Create the appropriate backend - we'll handle this within the spawn block
         let backend_config = if config.use_local_memcached() {
-            None  // Signal to use local memcached
+            None // Signal to use local memcached
         } else {
             let client_builder = CacheClient::builder()
                 .default_ttl(DEFAULT_TTL)
                 .configuration(configurations::Laptop::latest())
                 .credential_provider(credential_provider.as_ref().unwrap().clone())
                 .with_num_connections(cache.connection_count());
-            
+
             Some(client_builder)
         };
 
@@ -370,7 +376,7 @@ async fn spawn(
                             std::process::exit(1);
                         });
                         let backend = MomentoCacheBackend(client);
-                        
+
                         listener::listener(
                             tcp_listener,
                             backend,
@@ -384,7 +390,7 @@ async fn spawn(
                         .await;
                     } else {
                         let backend = LocalMemcachedBackend::new(local_memcached_servers);
-                        
+
                         listener::listener(
                             tcp_listener,
                             backend,
@@ -407,7 +413,7 @@ async fn spawn(
                         eprintln!("could not create cache client: {}", e);
                         std::process::exit(1);
                     });
-                    
+
                     listener::resp_listener(
                         tcp_listener,
                         client,
