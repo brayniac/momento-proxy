@@ -510,28 +510,24 @@ async fn do_read2(socket: &mut OwnedReadHalf, buf: &mut Buffer) -> Result<NonZer
 }
 
 async fn do_write2(socket: &mut OwnedWriteHalf, buf: &mut Buffer) -> Result<NonZeroUsize, Error> {
-    match socket.write(buf.chunk()).await {
-        Ok(0) => {
-            SESSION_SEND.increment();
-            // zero length reads mean we got a HUP. close it
-            Err(Error::from(ErrorKind::ConnectionReset))
-        }
-        Ok(n) => {
+    // Try to write all available data at once for better performance
+    match socket.write_all(buf.chunk()).await {
+        Ok(()) => {
+            let n = buf.remaining();
             SESSION_SEND.increment();
             SESSION_SEND_BYTE.add(n as _);
             TCP_SEND_BYTE.add(n as _);
-
-            // NOTE: buffer will automatically compact
+            
+            // Advance the full amount since write_all guarantees all data was written
             buf.advance(n);
-
-            // // SAFETY: we have already checked that the number of bytes read was
-            // // greater than zero, so this unchecked conversion is safe
-            Ok(unsafe { NonZeroUsize::new_unchecked(n) })
+            
+            // SAFETY: we know n > 0 because we checked buf.remaining() > 0 before calling this
+            Ok(unsafe { NonZeroUsize::new_unchecked(n.max(1)) })
         }
         Err(e) => {
             SESSION_SEND.increment();
             SESSION_SEND_EX.increment();
-            // we has some other error reading from the socket,
+            // we has some other error writing to the socket,
             // return an error so the connection can be closed
             Err(e)
         }
