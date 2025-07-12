@@ -61,51 +61,218 @@ impl CacheBackend for MomentoCacheBackend {
     }
 }
 
-// Local memcached backend
+use tokio::net::TcpStream;
+use tokio::io::{AsyncWriteExt, AsyncReadExt, AsyncBufReadExt, BufReader};
+use std::sync::Arc;
+use tokio::sync::Semaphore;
+
+// Local memcached backend using async TCP with connection pooling
 #[derive(Clone)]
 pub struct LocalMemcachedBackend {
-    client: memcache::Client,
+    addr: String,
+    connection_limit: Arc<Semaphore>,
 }
 
 impl LocalMemcachedBackend {
     pub fn new(servers: Vec<String>) -> Self {
         eprintln!("LocalMemcachedBackend configured with servers: {:?}", servers);
         
-        // Create a single connection pool at initialization
-        let client = memcache::connect(servers.clone())
-            .unwrap_or_else(|e| {
-                panic!("Failed to connect to memcached servers {:?}: {}", servers, e);
-            });
+        let addr = servers.first()
+            .expect("No servers configured")
+            .strip_prefix("memcache://")
+            .unwrap_or(servers.first().unwrap())
+            .to_string();
         
-        Self { client }
+        Self {
+            addr,
+            connection_limit: Arc::new(Semaphore::new(100)), // Allow up to 100 concurrent connections
+        }
+    }
+    
+    async fn execute_get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MomentoError> {
+        let _permit = self.connection_limit.acquire().await.unwrap();
+        
+        let mut stream = TcpStream::connect(&self.addr).await
+            .map_err(|e| MomentoError {
+                message: format!("Failed to connect to memcached: {}", e),
+                error_code: momento::MomentoErrorCode::InternalServerError,
+                inner_error: None,
+                details: None,
+            })?;
+        
+        // Set TCP_NODELAY for lower latency
+        stream.set_nodelay(true).ok();
+        
+        // Send GET command
+        let key_str = String::from_utf8_lossy(key);
+        let cmd = format!("get {}\r\n", key_str);
+        stream.write_all(cmd.as_bytes()).await
+            .map_err(|e| MomentoError {
+                message: format!("Failed to send GET command: {}", e),
+                error_code: momento::MomentoErrorCode::InternalServerError,
+                inner_error: None,
+                details: None,
+            })?;
+        
+        // Read response
+        let mut reader = BufReader::new(&mut stream);
+        let mut line = String::new();
+        reader.read_line(&mut line).await
+            .map_err(|e| MomentoError {
+                message: format!("Failed to read response: {}", e),
+                error_code: momento::MomentoErrorCode::InternalServerError,
+                inner_error: None,
+                details: None,
+            })?;
+        
+        if line.starts_with("VALUE") {
+            // Parse VALUE <key> <flags> <bytes>\r\n
+            let parts: Vec<&str> = line.trim().split_whitespace().collect();
+            if parts.len() >= 4 {
+                let size = parts[3].parse::<usize>().unwrap_or(0);
+                let mut data = vec![0u8; size];
+                reader.read_exact(&mut data).await
+                    .map_err(|e| MomentoError {
+                        message: format!("Failed to read data: {}", e),
+                        error_code: momento::MomentoErrorCode::InternalServerError,
+                        inner_error: None,
+                        details: None,
+                    })?;
+                
+                // Read \r\n after data
+                let mut crlf = [0u8; 2];
+                reader.read_exact(&mut crlf).await.ok();
+                
+                // Read END\r\n
+                let mut end_line = String::new();
+                reader.read_line(&mut end_line).await.ok();
+                
+                return Ok(Some(data));
+            }
+        }
+        
+        Ok(None)
+    }
+    
+    async fn execute_set(&self, key: &[u8], data: &[u8], expiration: u32) -> Result<(), MomentoError> {
+        let _permit = self.connection_limit.acquire().await.unwrap();
+        
+        let mut stream = TcpStream::connect(&self.addr).await
+            .map_err(|e| MomentoError {
+                message: format!("Failed to connect to memcached: {}", e),
+                error_code: momento::MomentoErrorCode::InternalServerError,
+                inner_error: None,
+                details: None,
+            })?;
+        
+        // Set TCP_NODELAY for lower latency
+        stream.set_nodelay(true).ok();
+        
+        // Send SET command: set <key> <flags> <exptime> <bytes>\r\n<data>\r\n
+        let key_str = String::from_utf8_lossy(key);
+        let cmd = format!("set {} 0 {} {}\r\n", key_str, expiration, data.len());
+        
+        // Write command, data, and CRLF in one go for efficiency
+        let mut request = Vec::with_capacity(cmd.len() + data.len() + 2);
+        request.extend_from_slice(cmd.as_bytes());
+        request.extend_from_slice(data);
+        request.extend_from_slice(b"\r\n");
+        
+        stream.write_all(&request).await
+            .map_err(|e| MomentoError {
+                message: format!("Failed to send SET command: {}", e),
+                error_code: momento::MomentoErrorCode::InternalServerError,
+                inner_error: None,
+                details: None,
+            })?;
+        
+        // Read response
+        let mut reader = BufReader::new(&mut stream);
+        let mut response = String::new();
+        reader.read_line(&mut response).await
+            .map_err(|e| MomentoError {
+                message: format!("Failed to read response: {}", e),
+                error_code: momento::MomentoErrorCode::InternalServerError,
+                inner_error: None,
+                details: None,
+            })?;
+        
+        if !response.starts_with("STORED") {
+            return Err(MomentoError {
+                message: format!("Set failed: {}", response.trim()),
+                error_code: momento::MomentoErrorCode::InternalServerError,
+                inner_error: None,
+                details: None,
+            });
+        }
+        
+        Ok(())
+    }
+    
+    async fn execute_delete(&self, key: &[u8]) -> Result<(), MomentoError> {
+        let _permit = self.connection_limit.acquire().await.unwrap();
+        
+        let mut stream = TcpStream::connect(&self.addr).await
+            .map_err(|e| MomentoError {
+                message: format!("Failed to connect to memcached: {}", e),
+                error_code: momento::MomentoErrorCode::InternalServerError,
+                inner_error: None,
+                details: None,
+            })?;
+        
+        // Set TCP_NODELAY for lower latency
+        stream.set_nodelay(true).ok();
+        
+        // Send DELETE command
+        let key_str = String::from_utf8_lossy(key);
+        let cmd = format!("delete {}\r\n", key_str);
+        stream.write_all(cmd.as_bytes()).await
+            .map_err(|e| MomentoError {
+                message: format!("Failed to send DELETE command: {}", e),
+                error_code: momento::MomentoErrorCode::InternalServerError,
+                inner_error: None,
+                details: None,
+            })?;
+        
+        // Read response
+        let mut reader = BufReader::new(&mut stream);
+        let mut response = String::new();
+        reader.read_line(&mut response).await
+            .map_err(|e| MomentoError {
+                message: format!("Failed to read response: {}", e),
+                error_code: momento::MomentoErrorCode::InternalServerError,
+                inner_error: None,
+                details: None,
+            })?;
+        
+        if !response.starts_with("DELETED") && !response.starts_with("NOT_FOUND") {
+            return Err(MomentoError {
+                message: format!("Delete failed: {}", response.trim()),
+                error_code: momento::MomentoErrorCode::InternalServerError,
+                inner_error: None,
+                details: None,
+            });
+        }
+        
+        Ok(())
     }
 }
 
 #[async_trait]
 impl CacheBackend for LocalMemcachedBackend {
     async fn get(&self, _cache_name: &str, key: &[u8]) -> Result<GetResponse, MomentoError> {
-        let key_str = String::from_utf8_lossy(key);
-        
-        // Get value from memcached (ignoring flags)
-        match self.client.get::<Vec<u8>>(&key_str.as_ref()) {
-            Ok(Some(data)) => {
+        match self.execute_get(key).await? {
+            Some(data) => {
                 // Prepend 4 zero bytes for flags to match momento format
                 let mut value = vec![0, 0, 0, 0];
                 value.extend_from_slice(&data);
                 Ok(GetResponse::Hit { value })
-            },
-            Ok(None) => Ok(GetResponse::Miss),
-            Err(e) => Err(MomentoError {
-                message: format!("Memcached get error: {}", e),
-                error_code: momento::MomentoErrorCode::InternalServerError,
-                inner_error: None,
-                details: None,
-            }),
+            }
+            None => Ok(GetResponse::Miss),
         }
     }
     
     async fn set(&self, _cache_name: &str, key: Vec<u8>, value: Vec<u8>, ttl: Option<Duration>) -> Result<(), MomentoError> {
-        let key_str = String::from_utf8_lossy(&key);
         let expiration = ttl.map(|d| d.as_secs() as u32).unwrap_or(0);
         
         // Skip the first 4 bytes (flags) if present
@@ -115,29 +282,10 @@ impl CacheBackend for LocalMemcachedBackend {
             value.as_slice()
         };
         
-        // Store just the data, ignoring flags
-        self.client.set(&key_str.as_ref(), data, expiration)
-            .map_err(|e| MomentoError {
-                message: format!("Memcached set error: {}", e),
-                error_code: momento::MomentoErrorCode::InternalServerError,
-                inner_error: None,
-                details: None,
-            })?;
-        
-        Ok(())
+        self.execute_set(&key, data, expiration).await
     }
     
     async fn delete(&self, _cache_name: &str, key: Vec<u8>) -> Result<(), MomentoError> {
-        let key_str = String::from_utf8_lossy(&key);
-        
-        self.client.delete(&key_str.as_ref())
-            .map_err(|e| MomentoError {
-                message: format!("Memcached delete error: {}", e),
-                error_code: momento::MomentoErrorCode::InternalServerError,
-                inner_error: None,
-                details: None,
-            })?;
-        
-        Ok(())
+        self.execute_delete(&key).await
     }
 }
