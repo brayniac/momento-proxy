@@ -80,7 +80,7 @@ async fn run_get<B: CacheBackend>(
     recorder: &RpcCallGuard,
 ) -> Result<Option<protocol_memcache::Value>, Error> {
     let mut recorder = recorder.clone();
-    match timeout(Duration::from_millis(200), client.get(cache_name, key)).await {
+    match timeout(Duration::from_millis(5000), client.get(cache_name, key)).await {
         Ok(Ok(response)) => match response {
             GetResponse::Hit { value } => {
                 GET_KEY_HIT.increment();

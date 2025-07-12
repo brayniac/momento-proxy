@@ -59,8 +59,8 @@ pub async fn set<B: CacheBackend>(
         .map(|ttl| Duration::from_secs(ttl.max(1) as u64));
 
     match timeout(
-        Duration::from_millis(200),
-        client.set(cache_name, key.clone(), value.clone(), ttl),
+        Duration::from_millis(5000), // 5 seconds for large objects
+        client.set(cache_name, key, value, ttl),
     )
     .await
     {
@@ -69,7 +69,7 @@ pub async fn set<B: CacheBackend>(
 
             if request.noreply() {
                 klog_set(
-                    &key,
+                    &request.key(),
                     request.flags(),
                     request.ttl().get().unwrap_or(0),
                     value_len,
@@ -80,7 +80,7 @@ pub async fn set<B: CacheBackend>(
                 Ok(Response::stored(true))
             } else {
                 klog_set(
-                    &key,
+                    &request.key(),
                     request.flags(),
                     ttl.map(|v| v.as_secs()).unwrap_or(0) as _,
                     value_len,
@@ -98,7 +98,7 @@ pub async fn set<B: CacheBackend>(
             SESSION_SEND.increment();
 
             klog_set(
-                &key,
+                &request.key(),
                 request.flags(),
                 request.ttl().get().unwrap_or(0),
                 value_len,
@@ -118,7 +118,7 @@ pub async fn set<B: CacheBackend>(
             SESSION_SEND.increment();
 
             klog_set(
-                &key,
+                &request.key(),
                 request.flags(),
                 request.ttl().get().unwrap_or(0),
                 value_len,
