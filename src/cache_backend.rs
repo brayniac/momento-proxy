@@ -344,8 +344,8 @@ impl LocalMemcachedBackend {
             .unwrap_or(servers.first().unwrap())
             .to_string();
 
-        // Create multiple worker tasks (e.g., 100 workers)
-        let num_workers = 100;
+        // Create multiple worker tasks - 8 workers matches optimal concurrency
+        let num_workers = 8;
         let mut workers = Vec::with_capacity(num_workers);
 
         for _ in 0..num_workers {
