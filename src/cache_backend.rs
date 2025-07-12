@@ -64,37 +64,30 @@ impl CacheBackend for MomentoCacheBackend {
 // Local memcached backend
 #[derive(Clone)]
 pub struct LocalMemcachedBackend {
-    servers: Vec<String>,
+    client: memcache::Client,
 }
 
 impl LocalMemcachedBackend {
     pub fn new(servers: Vec<String>) -> Self {
         eprintln!("LocalMemcachedBackend configured with servers: {:?}", servers);
-        Self { servers }
-    }
-    
-    fn connect(&self) -> Result<memcache::Client, MomentoError> {
-        memcache::connect(self.servers.clone())
-            .map_err(|e| {
-                eprintln!("Failed to connect to memcached servers {:?}: {}", self.servers, e);
-                MomentoError {
-                    message: format!("Failed to connect to memcached: {}", e),
-                    error_code: momento::MomentoErrorCode::InternalServerError,
-                    inner_error: None,
-                    details: None,
-                }
-            })
+        
+        // Create a single connection pool at initialization
+        let client = memcache::connect(servers.clone())
+            .unwrap_or_else(|e| {
+                panic!("Failed to connect to memcached servers {:?}: {}", servers, e);
+            });
+        
+        Self { client }
     }
 }
 
 #[async_trait]
 impl CacheBackend for LocalMemcachedBackend {
     async fn get(&self, _cache_name: &str, key: &[u8]) -> Result<GetResponse, MomentoError> {
-        let client = self.connect()?;
         let key_str = String::from_utf8_lossy(key);
         
         // Get value from memcached (ignoring flags)
-        match client.get::<Vec<u8>>(&key_str.as_ref()) {
+        match self.client.get::<Vec<u8>>(&key_str.as_ref()) {
             Ok(Some(data)) => {
                 // Prepend 4 zero bytes for flags to match momento format
                 let mut value = vec![0, 0, 0, 0];
@@ -112,7 +105,6 @@ impl CacheBackend for LocalMemcachedBackend {
     }
     
     async fn set(&self, _cache_name: &str, key: Vec<u8>, value: Vec<u8>, ttl: Option<Duration>) -> Result<(), MomentoError> {
-        let client = self.connect()?;
         let key_str = String::from_utf8_lossy(&key);
         let expiration = ttl.map(|d| d.as_secs() as u32).unwrap_or(0);
         
@@ -124,7 +116,7 @@ impl CacheBackend for LocalMemcachedBackend {
         };
         
         // Store just the data, ignoring flags
-        client.set(&key_str.as_ref(), data, expiration)
+        self.client.set(&key_str.as_ref(), data, expiration)
             .map_err(|e| MomentoError {
                 message: format!("Memcached set error: {}", e),
                 error_code: momento::MomentoErrorCode::InternalServerError,
@@ -136,10 +128,9 @@ impl CacheBackend for LocalMemcachedBackend {
     }
     
     async fn delete(&self, _cache_name: &str, key: Vec<u8>) -> Result<(), MomentoError> {
-        let client = self.connect()?;
         let key_str = String::from_utf8_lossy(&key);
         
-        client.delete(&key_str.as_ref())
+        self.client.delete(&key_str.as_ref())
             .map_err(|e| MomentoError {
                 message: format!("Memcached delete error: {}", e),
                 error_code: momento::MomentoErrorCode::InternalServerError,
