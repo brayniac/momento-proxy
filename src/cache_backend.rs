@@ -110,10 +110,13 @@ async fn memcached_worker(addr: String, mut receiver: mpsc::Receiver<Command>) {
 
         // Process commands on this connection
         while let Some(cmd) = receiver.recv().await {
-            match cmd {
+            let should_reconnect = match cmd {
                 Command::Get { key, response } => {
                     let result = execute_get(&mut reader, &mut writer, &key).await;
+                    // Check if we got a broken pipe or other connection error
+                    let is_connection_error = matches!(&result, Err(e) if e.message.contains("Broken pipe") || e.message.contains("Connection reset"));
                     let _ = response.send(result);
+                    is_connection_error
                 }
                 Command::Set {
                     key,
@@ -123,12 +126,24 @@ async fn memcached_worker(addr: String, mut receiver: mpsc::Receiver<Command>) {
                 } => {
                     let result =
                         execute_set(&mut reader, &mut writer, &key, &data, expiration).await;
+                    // Check if we got a broken pipe or other connection error
+                    let is_connection_error = matches!(&result, Err(e) if e.message.contains("Broken pipe") || e.message.contains("Connection reset"));
                     let _ = response.send(result);
+                    is_connection_error
                 }
                 Command::Delete { key, response } => {
                     let result = execute_delete(&mut reader, &mut writer, &key).await;
+                    // Check if we got a broken pipe or other connection error
+                    let is_connection_error = matches!(&result, Err(e) if e.message.contains("Broken pipe") || e.message.contains("Connection reset"));
                     let _ = response.send(result);
+                    is_connection_error
                 }
+            };
+            
+            // If we got a connection error, break out of the loop to reconnect
+            if should_reconnect {
+                eprintln!("Worker detected connection error, reconnecting to {}", addr);
+                break;
             }
         }
     }
