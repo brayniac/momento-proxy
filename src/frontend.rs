@@ -216,18 +216,20 @@ pub(crate) async fn handle_memcache_client_concrete<B: CacheBackend>(
 
                     let proxy_metrics = proxy_metrics.clone();
                     let memory_cache = memory_cache.clone();
-                    // Handle request inline instead of spawning a task
-                    handle_memcache_request(
-                        sender,
-                        client,
-                        cache_name,
-                        sequence,
-                        request,
-                        flags,
-                        proxy_metrics,
-                        memory_cache,
-                    )
-                    .await;
+                    // Spawn task to handle request concurrently
+                    tokio::spawn(async move {
+                        handle_memcache_request(
+                            sender,
+                            client,
+                            cache_name,
+                            sequence,
+                            request,
+                            flags,
+                            proxy_metrics,
+                            memory_cache,
+                        )
+                        .await;
+                    });
                 }
                 Err(e) => match e.kind() {
                     ErrorKind::WouldBlock => {
