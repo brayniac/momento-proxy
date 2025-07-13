@@ -18,51 +18,47 @@ pub async fn get(
     recorder: &RpcCallGuard,
 ) -> Result<Response, Error> {
     let mut tasks = futures::stream::FuturesOrdered::new();
-    let mut eager_hits = Vec::new();
+    let mut values = vec![None; request.keys().len()];
     let mut mcache_recorder = recorder.clone();
-    for key in request.keys() {
+
+    for (id, key) in request.keys().iter().enumerate() {
         if let Some(memory_cache) = &memory_cache {
             match memory_cache.get(&**key) {
                 Some(hit) => {
-                    eager_hits.push(match hit.into_value() {
-                        cache::CacheValue::Memcached { value } => value,
-                    });
+                    values[id] = match hit.into_value() {
+                        cache::CacheValue::Memcached { value } => Some(value),
+                    };
                     debug!("eager hit for key {:?}", key);
                     mcache_recorder.complete_hit_mcache();
                 }
                 None => {
                     BACKEND_REQUEST.increment();
-                    tasks.push_back(run_get(client, cache_name, flags, key, recorder));
+                    tasks.push_back(run_get(client, cache_name, flags, id, key, recorder));
                 }
             }
         } else {
             BACKEND_REQUEST.increment();
-            tasks.push_back(run_get(client, cache_name, flags, key, recorder));
+            tasks.push_back(run_get(client, cache_name, flags, id, key, recorder));
         }
     }
 
     // If we had received an auth or timeout error, we should return the error immediately
-    let values_from_upstream: Vec<Result<Option<protocol_memcache::Value>, Error>> =
+    let values_from_upstream: Vec<Result<Option<(usize, protocol_memcache::Value)>, Error>> =
         tasks.collect().await;
-    let mut values: Vec<protocol_memcache::Value> = Vec::new();
+
     for value in values_from_upstream.into_iter() {
-        if let Ok(Some(v)) = value {
-            values.push(v);
+        if let Ok(Some((id, v))) = value {
+            if let Some(memory_cache) = &memory_cache {
+                memory_cache.set(v.key().to_vec(), CacheValue::Memcached { value: v.clone() });
+            }
+
+            values[id] = Some(v);
         } else if let Err(e) = value {
             return Ok(Response::server_error(format!("{e}")));
         }
     }
-    if let Some(memory_cache) = &memory_cache {
-        for value in values.iter() {
-            memory_cache.set(
-                value.key().to_vec(),
-                CacheValue::Memcached {
-                    value: value.clone(),
-                },
-            );
-        }
-    }
-    values.extend(eager_hits);
+
+    let values: Vec<protocol_memcache::Value> = values.drain(..).flatten().collect();
 
     if !values.is_empty() {
         Ok(Response::values(values.into()))
@@ -75,9 +71,10 @@ async fn run_get(
     client: &CacheClient,
     cache_name: &str,
     flags: bool,
+    id: usize,
     key: &[u8],
     recorder: &RpcCallGuard,
-) -> Result<Option<protocol_memcache::Value>, Error> {
+) -> Result<Option<(usize, protocol_memcache::Value)>, Error> {
     let mut recorder = recorder.clone();
     match timeout(Duration::from_millis(200), client.get(cache_name, key)).await {
         Ok(Ok(response)) => match response {
@@ -97,15 +94,19 @@ async fn run_get(
 
                     recorder.complete_hit_momento();
                     klog_1(&"get", &key, Status::Hit, length);
-                    Ok(Some(protocol_memcache::Value::new(
-                        key, flags, None, &value,
+                    Ok(Some((
+                        id,
+                        protocol_memcache::Value::new(key, flags, None, &value),
                     )))
                 } else {
                     let length = value.len();
 
                     recorder.complete_hit_momento();
                     klog_1(&"get", &key, Status::Hit, length);
-                    Ok(Some(protocol_memcache::Value::new(key, 0, None, &value)))
+                    Ok(Some((
+                        id,
+                        protocol_memcache::Value::new(key, 0, None, &value),
+                    )))
                 }
             }
             GetResponse::Miss => {
