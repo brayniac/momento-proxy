@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
-use crate::cache::CacheValue;
+use crate::cache::{CacheValue, LocalCache};
 use crate::klog::{klog_set, Status};
 use crate::{Error, *};
 use momento::cache::SetRequest;
@@ -13,7 +13,7 @@ pub async fn set(
     cache_name: &str,
     request: &Set,
     flags: bool,
-    memory_cache: Option<MCache>,
+    memory_cache: Option<LocalCache>,
 ) -> Result<Response, Error> {
     SET.increment();
 
@@ -48,7 +48,9 @@ pub async fn set(
         // (2) Multiple proxies each keep a warm local cache, even if writes are done by others
         let flags = if flags { request.flags() } else { 0 };
         let value = protocol_memcache::Value::new(&key, flags, None, &request.value());
-        memory_cache.set(key.to_vec(), CacheValue::Memcached { value });
+        memory_cache
+            .set(key.to_vec(), CacheValue::Memcached { value })
+            .await;
     }
 
     BACKEND_REQUEST.increment();

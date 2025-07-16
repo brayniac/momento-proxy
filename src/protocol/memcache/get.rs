@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
-use crate::cache::CacheValue;
+use crate::cache::{CacheValue, LocalCache};
 use crate::klog::{klog_1, Status};
 use crate::{Error, *};
 use futures::StreamExt;
@@ -14,7 +14,7 @@ pub async fn get(
     cache_name: &str,
     request: &Get,
     flags: bool,
-    memory_cache: Option<MCache>,
+    memory_cache: Option<LocalCache>,
     recorder: &RpcCallGuard,
 ) -> Result<Response, Error> {
     let mut tasks = futures::stream::FuturesOrdered::new();
@@ -22,7 +22,7 @@ pub async fn get(
     let mut mcache_recorder = recorder.clone();
     for key in request.keys() {
         if let Some(memory_cache) = &memory_cache {
-            match memory_cache.get(&**key) {
+            match memory_cache.get(&**key).await {
                 Some(hit) => {
                     eager_hits.push(match hit.into_value() {
                         cache::CacheValue::Memcached { value } => value,
@@ -54,12 +54,14 @@ pub async fn get(
     }
     if let Some(memory_cache) = &memory_cache {
         for value in values.iter() {
-            memory_cache.set(
-                value.key().to_vec(),
-                CacheValue::Memcached {
-                    value: value.clone(),
-                },
-            );
+            memory_cache
+                .set(
+                    value.key().to_vec(),
+                    CacheValue::Memcached {
+                        value: value.clone(),
+                    },
+                )
+                .await;
         }
     }
     values.extend(eager_hits);

@@ -55,6 +55,14 @@ pub struct Proxy {
     threads: Option<usize>,
 }
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Default)]
+pub enum MemoryCacheImpl {
+    #[default]
+    Moka,
+    MokaAsync,
+    Foyer,
+}
+
 // definitions
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Cache {
@@ -74,6 +82,14 @@ pub struct Cache {
     /// 0 means no expiration
     #[serde(default)]
     memory_cache_ttl_seconds: u64,
+    #[serde(default)]
+    memory_cache_impl: MemoryCacheImpl,
+    /// Disk cache size in bytes (only used with Foyer implementation), 0 to disable
+    #[serde(default)]
+    disk_cache_bytes: usize,
+    /// Directory path for disk cache (only used with Foyer implementation)
+    #[serde(default)]
+    disk_cache_dir: Option<String>,
     #[serde(default = "default_buffer_size")]
     buffer_size: NonZeroUsize,
 }
@@ -130,10 +146,22 @@ impl Cache {
         self.memory_cache_ttl_seconds
     }
 
+    pub fn memory_cache_impl(&self) -> MemoryCacheImpl {
+        self.memory_cache_impl
+    }
+
     pub fn buffer_size(&self) -> usize {
         // rounds the buffer size up to the next nearest multiple of the
         // pagesize
         std::cmp::max(1, self.buffer_size.get()).div_ceil(PAGESIZE)
+    }
+
+    pub fn disk_cache_bytes(&self) -> usize {
+        self.disk_cache_bytes
+    }
+
+    pub fn disk_cache_dir(&self) -> Option<&str> {
+        self.disk_cache_dir.as_deref()
     }
 }
 
