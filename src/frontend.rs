@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
+use crate::cache::LocalCache;
 use crate::protocol::*;
 use crate::*;
 use pelikan_net::TCP_SEND_BYTE;
@@ -19,7 +20,7 @@ pub(crate) async fn handle_memcache_client(
     cache_name: String,
     flags: bool,
     proxy_metrics: impl ProxyMetrics,
-    memory_cache: Option<MCache>,
+    memory_cache: Option<LocalCache>,
     buffer_size: usize,
 ) {
     debug!("accepted memcache client, waiting for first byte to detect text or binary");
@@ -87,7 +88,7 @@ pub(crate) async fn handle_memcache_client_concrete(
         + 'static,
     flags: bool,
     proxy_metrics: impl ProxyMetrics,
-    memory_cache: Option<MCache>,
+    memory_cache: Option<LocalCache>,
     buffer_size: usize,
 ) {
     // initialize a buffer for incoming bytes from the client
@@ -286,12 +287,12 @@ async fn handle_memcache_request(
     request: protocol_memcache::Request,
     flags: bool,
     proxy_metrics: impl ProxyMetrics,
-    memory_cache: Option<MCache>,
+    memory_cache: Option<LocalCache>,
 ) {
     let result = match request {
         memcache::Request::Delete(ref r) => {
             if let Some(memory_cache) = memory_cache {
-                memory_cache.delete(r.key());
+                memory_cache.delete(r.key()).await;
             }
             with_wrapped_error_response_rpc_call_guard(
                 proxy_metrics.begin_memcached_delete(),

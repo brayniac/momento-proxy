@@ -7,7 +7,7 @@ extern crate logger;
 
 use ::config::{AdminConfig, TimeType};
 use backtrace::Backtrace;
-use cache::MCache;
+use cache::create_cache;
 use clap::{Arg, Command};
 use core::num::NonZeroUsize;
 use core::sync::atomic::{AtomicUsize, Ordering};
@@ -322,12 +322,13 @@ async fn spawn(
                 cache.cache_name(),
                 addr
             );
-            debug!("cache {} config: protocol={:?} flags={} local_cache_bytes={} local_cache_ttl_seconds={} buffer_size={}",
+            debug!("cache {} config: protocol={:?} flags={} local_cache_bytes={} local_cache_ttl_seconds={} local_cache_impl={:?} buffer_size={}",
                 cache.cache_name(),
                 cache.protocol(),
                 cache.flags(),
                 cache.memory_cache_bytes(),
                 cache.memory_cache_ttl_seconds(),
+                cache.memory_cache_impl(),
                 cache.buffer_size(),
             );
             let tcp_listener =
@@ -340,7 +341,16 @@ async fn spawn(
                 } else {
                     Duration::from_secs(cache.memory_cache_ttl_seconds())
                 };
-                Some(MCache::new(cache.memory_cache_bytes(), ttl))
+                Some(
+                    create_cache(
+                        cache.memory_cache_impl(),
+                        cache.memory_cache_bytes(),
+                        ttl,
+                        cache.disk_cache_bytes(),
+                        cache.disk_cache_dir(),
+                    )
+                    .await,
+                )
             } else {
                 None
             };

@@ -21,7 +21,7 @@ futures = "0.3.31"
 libc = "0.2.149"
 logger = { git = "https://github.com/pelikan-io/pelikan.git", rev = "4afdd11", package = "logger" }
 metriken = "0.7.0"
-moka = { version = "0.12", features = ["sync"] }
+moka = { version = "0.12", features = ["sync", "future"] }
 momento = { git = "https://github.com/brayniac/client-sdk-rust.git", branch = "local-testing" }
 pelikan-net = { git = "https://github.com/pelikan-io/pelikan.git", rev = "4afdd11", package = "pelikan-net", features = ["metrics"] }
 protocol-admin = { git = "https://github.com/pelikan-io/pelikan.git", rev = "4afdd11", package = "protocol-admin" }
@@ -37,6 +37,7 @@ goodmetrics = "7.1.1"
 tokio-rustls = "0.26.2"
 webpki-roots = "1.0.0"
 tonic = "0.13.1"
+foyer = { version = "0.18.0", features = ["serde"] }
 
 [profile.release]
 opt-level = 3

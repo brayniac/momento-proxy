@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
+use crate::cache::LocalCache;
 use crate::*;
 use momento::CacheClientBuilder;
 use momento_proxy::Protocol;
@@ -14,7 +15,7 @@ pub(crate) async fn listener(
     protocol: Protocol,
     flags: bool,
     proxy_metrics: impl ProxyMetrics,
-    memory_cache: Option<MCache>,
+    memory_cache: Option<LocalCache>,
     buffer_size: usize,
 ) {
     // Establishing a gRPC connection is expensive, so the client needs to be created outside the
